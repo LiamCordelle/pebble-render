@@ -1,20 +1,23 @@
 # pebble-render
 
-Pixel-exact Pebble Time 2 (emery) screenshots on your computer, without the emulator.
+Pixel-exact Pebble Time 2 (emery) screenshots of watchfaces and apps on your computer,
+without the emulator.
 
-`render.py` compiles the real PebbleOS graphics, font, window and layer code for your
-machine, runs your watchface's own C code against it, and writes the same PNG
+`render.py` compiles the real PebbleOS graphics, font, UI and animation code for your
+machine, runs your app's own C code against it, and writes the same PNG
 `pebble screenshot` would, pixel for pixel. A render takes about half a second, any
 number can run in parallel, and you choose the scene: time, time zone, battery, phone
-connection, steps, heart rate, even an incoming AppMessage.
+connection, steps, heart rate, button presses and messages from the phone. It can also
+record the whole run as a GIF.
 
 ![The kitchen-sink example on the emulator and in render.py, with an empty difference](docs/parity.png)
 
 ## Why
 
-Iterating on a watchface with the emulator means build, install, wait, screenshot after
-every change, one app at a time. The emulator also hangs now and then when you switch
-between apps ("X is not responding").
+Iterating on a watchface or app with the emulator means build, install, wait, press your
+way to the screen you're working on, screenshot, after every change, one app at a time.
+The emulator also hangs now and then when you switch between apps ("X is not
+responding").
 
 Measured on an M3 Pro Mac with a production watchface
 (`tests/benchmark.py`, median of 5):
@@ -30,8 +33,8 @@ Measured on an M3 Pro Mac with a production watchface
 That's about 9x faster per code change, 70x for scene changes, and nearly 400x for a
 batch of ten scenes, which the emulator can only do one after another.
 
-Use the emulator as the final check, and for what it does that this doesn't: real
-animations, buttons, logs and other Pebble models.
+Use the emulator as the final check, and for what it does that this doesn't: real-time
+behaviour, logs, the phone side (PebbleKit JS) and other Pebble models.
 
 ## Accuracy
 
@@ -45,10 +48,16 @@ SDK's emery emulator, rendered at the same moment. All of them differ by zero pi
   static and weather templates, and its Lightsaber Duel sample (including a star field
   drawn from `rand()` after `srand(time(NULL))`)
 - a published production watchface with custom fonts, PDC icons, health and battery
+- `examples/app-tour`, a watchapp with a status bar, menu, action bar, scroll layer,
+  property animation, number window, action menu and simple menu, after each of 14
+  sequences of button presses, including held buttons
+- an activity-tracking watchapp's menu, before and after presses
 - 45 renders of earlier watchface designs, through the lab mode described below
 
-Check your own watchface with `python3 tests/parity.py path/to/project`. It needs the
-emulator, and handles the app-switch hang by installing every project under one test UUID.
+Check your own app with `python3 tests/parity.py path/to/project`, adding the same
+`--press`, `--wait` and `--message` actions as render.py to check a screen further in. It
+needs the emulator, and handles the app-switch hang by installing every project under one
+test UUID.
 
 ## Requirements
 
@@ -99,7 +108,17 @@ render.py . night.png --time 23:41 --12h --battery 9 --no-phone
 render.py . weather.png --message TEMPERATURE=14 --message CONDITIONS=Cloudy
 render.py . nz.png --tz Pacific/Auckland --date 2026-12-25
 render.py . walk.png --steps 8342 --hr 112
-render.py . animated.png --run-ms 1500     # app timers run for 1.5 s first
+render.py . animated.png --run-ms 1500     # 1.5 s of timers and animations first
+```
+
+Apps: press buttons and send phone messages in order, as you would on the emulator.
+
+```sh
+render.py . third.png --press down --press down --press select   # the third menu item
+render.py . reset.png --press select:1000                        # hold select for 1 s
+render.py . locked.png --press select --message GPS_STATUS=2 --wait 2000
+render.py . slide.png --press select --run-ms 1500 --gif slide.gif   # and a GIF of it all
+render.py . resumed.png --persist 1=42 --persist 2=hex:0a0b0c         # start with stored values
 ```
 
 | Option | Default | Effect |
@@ -113,10 +132,17 @@ render.py . animated.png --run-ms 1500     # app timers run for 1.5 s first
 | `--no-phone` | connected | the phone is disconnected |
 | `--steps N` | `0` | `health_service_sum_today(HealthMetricStepCount)` |
 | `--hr N` | `0` | `health_service_peek_current_value(HealthMetricHeartRateBPM)` |
-| `--run-ms N` | `0` | let app timers run for N ms of simulated time before the frame |
-| `--no-tick` | | don't call the tick handler at start |
-| `--message KEY=VALUE` | | deliver an AppMessage at start; `KEY` is a `messageKeys` name or a number; repeatable |
-| `--scale N` | `3` | also write `OUT_<N>x.png`, a nearest-neighbour upscale (`1` to skip) |
+| `--no-tick` | | don't deliver the first tick at launch |
+| `--press BUTTON[:MS]` | | press `back`, `up`, `select` or `down`: held for 100 ms (or MS), then 500 ms pass, like `pebble emu-button click` |
+| `--wait MS` | | let MS of time pass: timers, animations and ticks run |
+| `--message KEY=VALUE` | | an AppMessage from the phone; `KEY` is a `messageKeys` name or a number; consecutive ones form one message |
+| `--run-ms N` | `0` | let N ms pass after the presses, waits and messages, before the frame |
+| `--persist KEY=VALUE` | | start with a value in persistent storage: an integer, a string, or `hex:` bytes |
+| `--load-persist FILE` | | start with the storage `--save-persist` wrote |
+| `--save-persist FILE` | | after the app exits, write its persistent storage (JSON) |
+| `--gif FILE` | | also record everything from launch to the frame as an animated GIF |
+| `--fps N` | `20` | the GIF's frame rate, in simulated time |
+| `--scale N` | `3` | also write `OUT_<N>x.png` (and `.gif`), a nearest-neighbour upscale (`1` to skip) |
 | `--no-correction` | | skip the LCD colour correction `pebble screenshot` applies |
 | `--raw FILE` | | also write the raw 8-bit framebuffer |
 | `-v` | | print firmware log lines |
@@ -128,30 +154,40 @@ render.py . animated.png --run-ms 1500     # app timers run for 1.5 s first
 **Your app's real code.** `main()` runs, `init()` builds the windows and layers, and the
 frame is drawn by the firmware's own `window_render`.
 
-**Then, once, before the frame:**
-1. app focus
-2. the first tick, as the watch delivers at the next minute boundary
-3. the `--message`, if any
-4. `--run-ms` of app timers on a simulated clock
+**Then, in order:**
+1. app focus, and the first tick, which the watch delivers within a second of launch
+2. your `--press`, `--wait` and `--message` actions
+3. `--run-ms`
 
-**Drawing (the firmware's own code):**
+Time is simulated. It moves only during presses, waits and `--run-ms`, and as it does, app
+timers fire, animations advance and the clock ticks every second. After each event the
+window is redrawn if it asked to be, as on the watch, so the PNG shows what the watch
+would be showing.
+
+**Drawing and UI (the firmware's own code):**
 - `graphics_*`, `GPath`, PDC draw commands, bitmaps and PNGs, `GBitmapSequence`
 - system and custom fonts
-- `Layer` trees with clipping, `TextLayer`, `BitmapLayer`, `RotBitmapLayer`, `Window`
+- `Layer` trees with clipping, `TextLayer`, `BitmapLayer`, `RotBitmapLayer`,
+  `InverterLayer`, `Window`
+- `MenuLayer`, `SimpleMenuLayer`, `ScrollLayer`, `ActionBarLayer`, `StatusBarLayer`,
+  `NumberWindow`, `ActionMenu`
+- click handling (single, repeating, multi and long clicks), `Animation` and
+  `PropertyAnimation`
 
 **Services (deterministic stand-ins):**
 - time and time zone, clock style, battery, phone connection, health (steps and heart rate)
-- persistent storage: in memory, empty at start like a fresh install
-- AppMessage: outgoing messages are accepted and dropped; incoming ones come from
-  `--message`
+- persistent storage: in memory, empty at start like a fresh install unless you seed it
+- AppMessage: outgoing messages are acknowledged after 100 ms, or fail with `--no-phone`;
+  incoming ones come from `--message`
 - accelerometer, compass, touch, vibes and backlight calls are accepted and ignored
 
 **Not supported yet.** The render stops with a message naming the call:
-- the `Animation` and `PropertyAnimation` framework
-- `MenuLayer`, `ScrollLayer`, `ActionBarLayer`, `StatusBarLayer`
 - `AppSync`, dictation, wakeup, workers, data logging, app glances
 
 Other limits:
+- **Window transitions** aren't drawn: windows change at once. Wait for a transition to
+  end before comparing a frame with the watch (presses already do).
+- **The phone side:** PebbleKit JS doesn't run. Send what it would with `--message`.
 - **Platform:** emery (Pebble Time 2) only. Use the emulator for other models.
 - **Compiler:** your C is compiled by clang, so GCC-only extensions, such as nested
   functions, won't build.
@@ -165,7 +201,9 @@ Other limits:
 headers and unit-test overrides:
 - graphics, fonts and text layout
 - PNG and PDC decoding
-- `Layer`, `Window`, `TextLayer` and `BitmapLayer`
+- `Layer`, `Window`, `TextLayer`, `BitmapLayer` and the menu, scroll, action bar and status
+  bar layers
+- click recognizers and the Animation framework
 - the dictionary code
 
 Your project's sources are compiled against the SDK's emery `pebble.h` with the defines
@@ -176,7 +214,8 @@ becomes `graphics_fill_round_rect_by_value`. Both halves link into one small pro
 Two host files stand in for the rest of the OS:
 - `hostgfx/fw_host.c`: resources from your SDK's emulator flash image, the system font
   table, app state, and the clock.
-- `hostgfx/os_host.c`: the window stack, event loop, app timers and services.
+- `hostgfx/os_host.c`: the window stack, event loop, buttons, simulated clock, app
+  timers and services.
 
 Any SDK call they don't implement becomes a stub that stops the render and names the call.
 

@@ -1,8 +1,9 @@
 """Build the host renderer: PebbleOS applib code compiled for the host, plus a project.
 
 The firmware side (src/pebbleos at the tag of the firmware inside the SDK's emery QEMU
-image) is compiled once into build/fw: the graphics stack, fonts and text, the UI layer
-code (windows, layers, text and bitmap layers) and the dictionary code AppMessage uses.
+image) is compiled once into build/fw: the graphics stack, fonts and text, the UI code
+(windows, layers, click recognizers, the Animation framework, menu, scroll, status bar and
+action bar layers) and the dictionary code AppMessage uses.
 
 Each project is compiled with the SDK's emery pebble.h, the same defines `pebble build`
 uses, and SDK function names mapped to their firmware implementations
@@ -87,12 +88,34 @@ FW_SOURCES = [
     'src/fw/applib/pbl_std/pbl_std.c',
     'src/fw/applib/pbl_std/strftime.c',
     'src/fw/applib/pbl_std/timelocal.c',
+    'src/fw/applib/ui/action_bar_layer.c',
+    'src/fw/applib/ui/action_menu_hierarchy.c',
+    'src/fw/applib/ui/action_menu_layer.c',
+    'src/fw/applib/ui/action_menu_window.c',
+    'src/fw/applib/ui/animation.c',
+    'src/fw/applib/ui/animation_interpolate.c',
+    'src/fw/applib/ui/animation_timing.c',
+    'src/fw/applib/ui/app_window_click_glue.c',
     'src/fw/applib/ui/bitmap_layer.c',
+    'src/fw/applib/ui/click.c',
+    'src/fw/applib/ui/content_indicator.c',
+    'src/fw/applib/ui/crumbs_layer.c',
+    'src/fw/applib/ui/inverter_layer.c',
     'src/fw/applib/ui/layer.c',
+    'src/fw/applib/ui/menu_layer.c',
+    'src/fw/applib/ui/menu_layer_system_cells.c',
+    'src/fw/applib/ui/number_window.c',
+    'src/fw/applib/ui/property_animation.c',
     'src/fw/applib/ui/rotate_bitmap_layer.c',
+    'src/fw/applib/ui/scroll_layer.c',
+    'src/fw/applib/ui/shadows.c',
+    'src/fw/applib/ui/simple_menu_layer.c',
+    'src/fw/applib/ui/status_bar_layer.c',
     'src/fw/applib/ui/text_layer.c',
     'src/fw/applib/ui/text_layer_flow.c',
     'src/fw/applib/ui/window.c',
+    'src/fw/shell/system_theme.c',
+    'src/fw/util/buffer.c',
     'src/fw/util/dict.c',
     'src/fw/applib/vendor/tinflate/tinflate.c',
     'src/fw/applib/vendor/uPNG/upng.c',
@@ -102,8 +125,10 @@ FW_SOURCES = [
     'lib/util/hash.c',
     'lib/util/iterator.c',
     'lib/util/keyed_circular_cache.c',
+    'lib/util/list.c',
     'lib/util/math.c',
     'lib/util/math_fixed.c',
+    'lib/util/string.c',
     'lib/util/trig.c',
 ]
 
@@ -118,6 +143,8 @@ FW_FLAGS = COMMON_FLAGS + [
     '-DPLATFORM_NAME="emery"', '-DCONFIG_SCREEN_COLOR_DEPTH_BITS=8',
     '-DCONFIG_PLATFORM_EMERY=1', '-DCONFIG_BOARD_OBELIX=1', '-DCONFIG_FLASH_GD25Q256E=1',
     '-DPLATFORM_DEFAULT=0', '-DMAX_FONT_GLYPH_SIZE=512', '-DCONFIG_LOG=1',
+    # The emulator firmware's 1000 Hz tick, which the Animation framework times frames with.
+    '-DCONFIG_QEMU=1',
     # text_layout.c only enables screen-shaped text flow outside unit tests; keep the
     # firmware behaviour for graphics_text_attributes_enable_screen_text_flow().
     '-DUSE_DISPLAY_PERIMETER_ON_FONT_LAYOUT',
@@ -133,6 +160,10 @@ FW_FLAGS = COMMON_FLAGS + [
     '-I', os.path.join(FREERTOS, 'portable', 'GCC', 'ARM_CM3'),
     '-I', TINYMT,
 ]
+
+# Firmware UI code keeps static GBitmaps in packed structs, so their image pointers aren't
+# 8-byte aligned. The macOS linker's chained fixups refuse those; classic fixups don't.
+LINK_FLAGS = ['-Wl,-no_fixup_chains'] if sys.platform == 'darwin' else []
 
 # Exactly the DEFINES `pebble build` uses for emery (build/c4che/emery_cache.py).
 APP_DEFINES = ['RELEASE', 'PBL_PLATFORM_EMERY', 'PBL_COLOR', 'PBL_RECT', 'PBL_MICROPHONE',
@@ -297,6 +328,6 @@ def build_project(project, scenario=0, fw_objs=None):
         stubs_o = _compile(stubs_c, stubs_c[:-2] + '.o', ['-O0', '-w'])
         # Link to a temporary name and rename, so a render already running keeps its binary.
         tmp_exe = exe + '.tmp%d' % os.getpid()
-        _run([CC, '-o', tmp_exe] + app_objs + fw_objs + [stubs_o, '-lm'])
+        _run([CC, '-o', tmp_exe] + app_objs + fw_objs + [stubs_o, '-lm'] + LINK_FLAGS)
         os.replace(tmp_exe, exe)
     return exe

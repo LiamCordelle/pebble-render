@@ -11,7 +11,8 @@
 // FW_DIR holds system_resources.pbpack and builtin_<id>.bin (see setup_fw.py).
 // OUT.raw receives the 200x228 GColor8 framebuffer, one byte per pixel.
 // Options set the scene (see host_options.h): --epoch N, --12h, --battery N, --charging,
-// --plugged, --no-phone, --steps N, --hr N, --run-ms N, --no-tick, --message K=V;...,
+// --plugged, --no-phone, --steps N, --hr N, --no-tick, --action ACTION (repeatable, in order),
+// --run-ms N, --persist-in FILE, --persist-out FILE, --frames FILE --frame-ms N,
 // --detail (lab projects), -v.
 
 #include "applib/applib_resource_private.h"
@@ -341,6 +342,10 @@ void *task_malloc(size_t bytes) {
   return malloc(bytes);
 }
 
+void *kernel_malloc_check(size_t bytes) {
+  return malloc(bytes);
+}
+
 void *task_calloc(size_t count, size_t size) {
   return calloc(count, size);
 }
@@ -386,8 +391,16 @@ time_t rtc_get_time(void) {
   return sys_get_time();
 }
 
+// Ticks count from boot, so they're never zero while an app runs (the Animation framework
+// treats a start time of zero as "not scheduled").
+#define HOST_UPTIME_AT_LAUNCH_MS 60000
+
 RtcTicks rtc_get_ticks(void) {
-  return (RtcTicks)host_elapsed_ms() * RTC_TICKS_HZ / 1000;
+  return ((RtcTicks)HOST_UPTIME_AT_LAUNCH_MS + host_elapsed_ms()) * RTC_TICKS_HZ / 1000;
+}
+
+RtcTicks sys_get_ticks(void) {
+  return rtc_get_ticks();
 }
 
 struct tm *sys_gmtime_r(const time_t *timep, struct tm *result) {
@@ -517,6 +530,10 @@ void passert_failed_hashed_no_message_with_lr(uint32_t packed_loghash, uint32_t 
   passert_failed_hashed(packed_loghash);
 }
 
+void util_log(const char *filename, int line, const char *string) {
+  pbl_log(LOG_LEVEL_DEBUG, filename, line, "%s", string);
+}
+
 void util_assertion_failed(const char *filename, int line) {
   passert_failed(filename, line, NULL);
 }
@@ -534,6 +551,7 @@ extern const char *hostgfx_app_design_name(int index);
 extern void hostgfx_app_load(int index);
 extern int hostgfx_app_draw(GContext *ctx, GRect bounds, int index, int detail);
 extern void hostgfx_app_unload(int index);
+extern void host_persist_save(void);
 
 int main(int argc, char **argv) {
   if (argc < 5) {
@@ -586,8 +604,24 @@ int main(int argc, char **argv) {
       strncpy(tz.tm_zone, abbr, sizeof(tz.tm_zone));
       time_util_update_timezone(&tz);
       i++;
-    } else if (val && strcmp(arg, "--message") == 0) {
-      g_host.messages = val;
+    } else if (val && strcmp(arg, "--action") == 0) {
+      if (g_host.num_actions >= HOST_MAX_ACTIONS) {
+        fprintf(stderr, "render: more than %d actions\n", HOST_MAX_ACTIONS);
+        return 2;
+      }
+      g_host.actions[g_host.num_actions++] = val;
+      i++;
+    } else if (val && strcmp(arg, "--persist-in") == 0) {
+      g_host.persist_in = val;
+      i++;
+    } else if (val && strcmp(arg, "--persist-out") == 0) {
+      g_host.persist_out = val;
+      i++;
+    } else if (val && strcmp(arg, "--frames") == 0) {
+      g_host.frames_path = val;
+      i++;
+    } else if (val && strcmp(arg, "--frame-ms") == 0) {
+      g_host.frame_ms = (uint32_t)atol(val);
       i++;
     } else {
       fprintf(stderr, "render: unknown option %s\n", arg);
@@ -644,6 +678,7 @@ int main(int argc, char **argv) {
                     "push a window in init() before the event loop\n");
     return 7;
   }
+  host_persist_save();
   if (s_ctx.lock) {
     graphics_release_frame_buffer(&s_ctx, &s_ctx.dest_bitmap);
   }

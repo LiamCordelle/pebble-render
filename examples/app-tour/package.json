@@ -1,0 +1,24 @@
+{
+  "name": "app-tour",
+  "author": "pebble-render",
+  "version": "1.0.0",
+  "keywords": ["pebble-app"],
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "App Tour",
+    "uuid": "6B1D9E2A-3C47-4F8B-9A5E-2D7C1B0E4F63",
+    "sdkVersion": "3",
+    "enableMultiJS": false,
+    "targetPlatforms": ["emery"],
+    "watchapp": { "watchface": false },
+    "messageKeys": [],
+    "resources": {
+      "media": [
+        { "type": "bitmap", "name": "ICON_PLUS", "file": "images/plus.png" },
+        { "type": "bitmap", "name": "ICON_RESET", "file": "images/reset.png" },
+        { "type": "bitmap", "name": "ICON_MINUS", "file": "images/minus.png" }
+      ]
+    }
+  }
+}
