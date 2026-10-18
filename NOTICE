@@ -1,0 +1,48 @@
+pebble-render
+Copyright 2026 Liam Cordelle
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Included in this repository
+---------------------------
+
+hostgfx/screenshot.py contains the 64-entry colour-correction table from pebble-tool
+(https://github.com/coredevices/pebble-tool), so renders match `pebble screenshot`:
+
+  The MIT License (MIT)
+
+  Copyright (c) 2015 Pebble Technology
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+
+hostgfx/patches/ holds a modification to PebbleOS source files (Apache License 2.0),
+applied to your local checkout by setup.sh.
+
+examples/kitchen-sink/resources/fonts/Silkscreen-Regular.ttf is Silkscreen, Copyright 2001
+The Silkscreen Project Authors (https://github.com/googlefonts/silkscreen), under the SIL
+Open Font License 1.1; see Silkscreen-OFL.txt beside it.
+
+Fetched or extracted by setup.sh, never part of this repository
+---------------------------------------------------------------
+
+- PebbleOS (https://github.com/coredevices/pebbleos): Apache License 2.0.
+- FreeRTOS-Kernel headers (https://github.com/coredevices/FreeRTOS-Kernel): MIT License.
+- TinyMT (https://github.com/MersenneTwister-Lab/TinyMT): BSD 3-Clause License.
+- System fonts and resources, read from the emulator image of the Pebble SDK installed on
+  your machine. They stay on your machine; don't redistribute them.

@@ -1,0 +1,30 @@
+diff --git a/src/fw/applib/graphics/text_render.c b/src/fw/applib/graphics/text_render.c
+index fce54cc..fa75a70 100644
+--- a/src/fw/applib/graphics/text_render.c
++++ b/src/fw/applib/graphics/text_render.c
+@@ -202,7 +202,9 @@ void render_glyph(GContext* const ctx, const uint32_t codepoint, FontInfo* const
+ 
+       // bitblt part of glyph_block:
+       const uint8_t number_of_bits = MIN(32 - dest_shift, MIN(glyph_line_bits_left, glyph_block_bits_left));
+-      const uint32_t mask = (((1 << number_of_bits) - 1) << dest_shift);
++      // host renderer: ARM yields all ones for a 32-bit shift; make that explicit (C UB elsewhere)
++      const uint32_t mask = ((number_of_bits >= 32) ? 0xFFFFFFFFu
++                             : ((1u << number_of_bits) - 1u)) << dest_shift;
+ 
+ #if CONFIG_SCREEN_COLOR_DEPTH_BITS == 8
+       // dest_block points to the block if the dest image was a 1-bit buffer
+diff --git a/src/fw/util/bitset.h b/src/fw/util/bitset.h
+index a34f1d7..2bc4f3b 100644
+--- a/src/fw/util/bitset.h
++++ b/src/fw/util/bitset.h
+@@ -85,8 +85,8 @@ static inline bool bitset32_get(const uint32_t* bitset, unsigned int index) {
+ __asm__ volatile ("ror %0,%0,%1" : "+r" (src) : "r" (32 - (shift)) :);
+ #else
+ #define rotl32(x, shift) \
+-uint32_t s = shift % 32; \
+-{x = ((x << (s)) | x >> (32 - (s)));}
++uint32_t s = (uint32_t)(shift) % 32; \
++{x = (s == 0) ? (x) : (((x) << s) | ((x) >> (32 - s)));}
+ #endif
+ 
+ //! Count the number of bits that are set to 1 in a multi-byte bitset.

@@ -1,0 +1,24 @@
+{
+  "name": "kitchen-sink",
+  "author": "pebble-render",
+  "version": "1.0.0",
+  "keywords": ["pebble-app"],
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "Kitchen Sink",
+    "uuid": "312B6174-630D-4489-A2D8-7271F4214943",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": ["emery"],
+    "watchapp": { "watchface": true },
+    "capabilities": ["health"],
+    "messageKeys": [],
+    "resources": {
+      "media": [
+        { "type": "bitmap", "name": "TILE", "file": "images/tile.png" },
+        { "type": "font", "name": "FONT_PIXEL_16", "file": "fonts/Silkscreen-Regular.ttf", "characterRegex": "[ -~]" }
+      ]
+    }
+  }
+}
